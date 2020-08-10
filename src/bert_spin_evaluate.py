@@ -3,6 +3,7 @@ import argparse
 import pdb
 import sys
 import json
+import math
 import re
 from collections import defaultdict
 from word_process import process
@@ -62,7 +63,6 @@ for context in open(args.testdata, 'r').readlines():
     # iterate over word prediction
     for i in range(1,len(words)):
         ctxt = " ".join(words[:i]+[model_keys['mask']])
-        #print(ctxt)
         input_ids = tokenizer.encode(ctxt, return_tensors='pt')
         # spin until a complete word is spelled
         unfinished = 1
@@ -82,7 +82,6 @@ for context in open(args.testdata, 'r').readlines():
             pr*=prs[argmax]
             # decode
             token = tokenizer._convert_id_to_token(int(argmax))
-            #token = tokenizer.decode(argmax)
 
             # is there a space for word boundary?
             if model_keys['type'] == 'bert':
@@ -104,17 +103,18 @@ for context in open(args.testdata, 'r').readlines():
         if model_keys['type'] == 'roberta': pred1 = process(seq, model_keys['space'])
 
         if pred1 == words[i]:
-            #print('YES\n', pred1, words[i])
             types1[pred1]+=1
             types10[pred1]+=1
-            t_ppx+=pr
+            t_ppx+=-math.log(pr)
         else: # BFS
             soft_match[words[i]][pred1]+=1
-            status = word_path_topk(model, tokenizer, topk, ctxt, words[i], model_keys)
-            if status == 'found':
-                #pdb.set_trace()
-                #print('UPDATE TOP 10\n')
+            pr = word_path_topk(model, tokenizer, topk, ctxt, words[i], model_keys)
+            if isinstance(pr, torch.Tensor):
                 types10[words[i]]+=1
+                t_ppx+=-math.log(pr)
+            else:
+                t_ppx+=100
+
 
     # dump to json
     if total > 1000:

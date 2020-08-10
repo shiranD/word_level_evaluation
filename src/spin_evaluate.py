@@ -3,6 +3,7 @@ import argparse
 import pdb
 import sys
 import json
+import math
 from collections import defaultdict
 from beam_search import word_path_topk
 from word_process import process
@@ -23,24 +24,14 @@ if args.m_type == 'gpt2':
     from transformers import GPT2Tokenizer, GPT2LMHeadModel
     tokenizer = GPT2Tokenizer.from_pretrained(args.model)
     model = GPT2LMHeadModel.from_pretrained(args.model)
-#elif args.m_type == 'roberta':
-#    from transformers import RobertaTokenizer, RobertaForMaskedLM 
-#    tokenizer = RobertaTokenizer.from_pretrained(args.model)
-#    model = RobertaForMaskedLM.from_pretrained(args.model)
-#elif args.m_type == 'bert':
-#    from transformers import BertTokenizer, BertForMaskedLM 
-#    tokenizer = BertTokenizer.from_pretrained(args.model)
-#    model = BertForMaskedLM.from_pretrained(args.model)
+    model_keys = {'type': 'gpt2', 'space': 'Ġ', 'nline': 'Ċ'}
 elif args.m_type == 'gpt':
     from transformers import OpenAIGPTTokenizer, OpenAIGPTLMHeadModel
     model = OpenAIGPTLMHeadModel.from_pretrained(args.model)
     tokenizer = OpenAIGPTTokenizer.from_pretrained(args.model)
-    # load int2token instead
+    model_keys = {'type': 'gpt', 'space': '</w>'}
 else:
     sys.exit()
-
-if args.m_type == 'gpt2': space='Ġ'
-if args.m_type == 'gpt': space='</w>'
 
 # freeze model weights
 for _, param in model.named_parameters():
@@ -66,7 +57,6 @@ for context in open(args.testdata, 'r').readlines():
     # iterate over word prediction
     for i in range(1,len(words)):
         ctxt = " ".join(words[:i])
-        #print(ctxt) 
         input_ids = tokenizer.encode(ctxt, return_tensors='pt')
         # spin until a complete word is spelled
         unfinished = 1
@@ -85,28 +75,31 @@ for context in open(args.testdata, 'r').readlines():
             token = tokenizer._convert_id_to_token(int(argmax))
             seq.append(token)
             # is there a space for word boundary?
-            if (args.m_type == 'gpt' and space in token): break
-            if (args.m_type == 'gpt2' and ((space in token and cnt>0) or token == 'Ċ')): break
+            if (model_keys['type'] == 'gpt' and model_keys['space'] in token): break
+            if (model_keys['type'] == 'gpt2' and ((model_keys['space'] in token and cnt>0) or token == model_keys['nline'])): break
             # concat to input_ids the new token
             argmax = argmax.view(1,1)
             input_ids = torch.cat((input_ids, argmax), 1)
             cnt+=1
             if cnt > 6: break # avoid infinite loop
         # process word
-        pred1 = process(seq, space)
+        pred1 = process(seq, model_keys['space'])
 
         if pred1 == words[i]:
             types1[pred1]+=1
             types10[pred1]+=1
-            t_ppx+=pr
-            continue
+            t_ppx+=-math.log(pr)
         else: # BFS
             soft_match[words[i]][pred1]+=1
-            status = word_path_topk(model, tokenizer, topk, ctxt, words[i], args.m_type)
-            if status == 'found':
-                #pdb.set_trace()
-                #print('UPDATE TOP 10\n')
+            pr = word_path_topk(model, tokenizer, topk, ctxt, words[i], model_keys)
+            if isinstance(pr, torch.Tensor):
                 types10[words[i]]+=1
+                try:
+                    t_ppx+=-math.log(pr)
+                except:
+                    print(pr)
+            else:
+                t_ppx+=100
 
     # dump to json
     if total > 1000:
