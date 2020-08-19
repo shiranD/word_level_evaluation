@@ -7,7 +7,7 @@ def to_string(word):
 
 def check(pfx, tgt, keys):
 
-    if keys['type']  == 'gpt2' and keys['space'] in pfx: pfx = pfx.strip(space) # rm first space
+    if keys['type']  == 'gpt2' and keys['space'] in pfx: pfx = pfx.strip(keys['space']) # rm first space
 
     if keys['space'] in pfx: # space indicates completion of word
         pfx_c = pfx.split(keys['space'])[0]
