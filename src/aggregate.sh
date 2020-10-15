@@ -22,5 +22,4 @@ ls $name/results | wc -l > ln_num
 number=$(cat ln_num)
 echo $number
 
-python my_src/spin_aggregate.py --folder ${name} --number ${number} --termdir ${dir} --sett ${kwd}
-#python my_src/aggregate.py --folder ${name} --number ${number} --termdir ${dir} --sett ${kwd}
+python my_src/aggregate.py --folder ${name} --number ${number} --termdir ${dir} --sett ${kwd}
